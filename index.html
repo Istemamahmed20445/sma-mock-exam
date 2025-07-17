@@ -12,7 +12,8 @@
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Added 'where' for queries
+        import { serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Added serverTimestamp
 
         // Define global variables for Firebase instances
         window.firebaseApp = null;
@@ -78,7 +79,7 @@
 
         // Make Firestore functions available globally or via window object for easier access in the main script
         window.firebase = {
-            getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy
+            getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp // Added where and serverTimestamp
         };
     </script>
     <style>
@@ -478,7 +479,7 @@
 
         const PASSING_MARK = 80; // 80%
 
-        // Firestore references
+        // Firestore references - These will be assigned after Firebase is ready
         let db;
         let appId;
         let currentUserId;
@@ -565,6 +566,7 @@
          * This function is called once Firebase is ready.
          */
         document.addEventListener('firebaseReady', () => {
+            // Assign global window variables to local script variables for convenience
             db = window.db;
             appId = window.appId;
             currentUserId = window.currentUserId;
@@ -634,16 +636,17 @@
             const adminPassword = adminPasswordInput.value;
 
             if (adminId === ADMIN_CREDENTIALS.id && adminPassword === ADMIN_CREDENTIALS.password) {
-                if (window.isFirebaseReady) {
+                // Ensure Firebase is ready before showing dashboard and attempting data operations
+                if (window.isFirebaseReady && window.db && window.appId) {
                     showPanel(adminDashboardPanel);
                     adminIdInput.value = '';
                     adminPasswordInput.value = '';
                     adminLoginMessage.textContent = '';
-                    // Data will be rendered by onSnapshot listeners
+                    // Data will be rendered by onSnapshot listeners, no need to call render functions directly here
                     viewQuestionSubjectSelect.value = '';
                     questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
                 } else {
-                    displayMessage(adminLoginMessage, 'Firebase is still initializing. Please wait a moment.', 'error');
+                    displayMessage(adminLoginMessage, 'Firebase is still initializing or failed to connect. Please wait a moment and try again.', 'error');
                 }
             } else {
                 displayMessage(adminLoginMessage, 'Invalid Admin ID or Password.', 'error');
@@ -742,8 +745,14 @@
                 return;
             }
 
+            // Ensure Firebase is ready before attempting Firestore write
+            if (!window.isFirebaseReady || !window.db || !window.appId) {
+                displayMessage(newSubjectNameInput.nextElementSibling, 'Firebase not ready. Please wait a moment and try again.', 'error');
+                return;
+            }
+
             try {
-                const subjectsColRef = firebase.collection(db, `artifacts/${appId}/public/data/subjects`);
+                const subjectsColRef = firebase.collection(window.db, `artifacts/${window.appId}/public/data/subjects`);
                 await firebase.addDoc(subjectsColRef, { name: newSubject });
                 newSubjectNameInput.value = '';
                 displayMessage(newSubjectNameInput.nextElementSibling, 'Subject added!', 'success');
@@ -763,22 +772,30 @@
 
                 const confirmed = await showConfirmationModal(`Are you sure you want to delete the subject "${subjectToDelete}"? This will also remove all questions related to this subject.`);
                 if (confirmed) {
+                    // Ensure Firebase is ready before attempting Firestore write
+                    if (!window.isFirebaseReady || !window.db || !window.appId) {
+                        displayMessage(e.target.closest('li'), 'Firebase not ready. Please wait a moment and try again.', 'error');
+                        return;
+                    }
+
                     try {
                         // Delete subject document
-                        const subjectsColRef = firebase.collection(db, `artifacts/${appId}/public/data/subjects`);
+                        const subjectsColRef = firebase.collection(window.db, `artifacts/${window.appId}/public/data/subjects`);
                         const q = firebase.query(subjectsColRef, firebase.where("name", "==", subjectToDelete));
                         const querySnapshot = await firebase.getDocs(q);
                         querySnapshot.forEach(async (document) => {
-                            await firebase.deleteDoc(firebase.doc(db, `artifacts/${appId}/public/data/subjects`, document.id));
+                            await firebase.deleteDoc(firebase.doc(window.db, `artifacts/${window.appId}/public/data/subjects`, document.id));
                         });
 
                         // Delete all questions associated with this subject
-                        const questionsColRef = firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+                        const questionsColRef = firebase.collection(window.db, `artifacts/${window.appId}/public/data/questions`);
                         const qQuestions = firebase.query(questionsColRef, firebase.where("subject", "==", subjectToDelete));
                         const questionSnapshot = await firebase.getDocs(qQuestions);
-                        questionSnapshot.forEach(async (document) => {
-                            await firebase.deleteDoc(firebase.doc(db, `artifacts/${appId}/public/data/questions`, document.id));
+                        const deleteQuestionPromises = []; // Collect promises for parallel deletion
+                        questionSnapshot.forEach((document) => {
+                            deleteQuestionPromises.push(firebase.deleteDoc(firebase.doc(window.db, `artifacts/${window.appId}/public/data/questions`, document.id)));
                         });
+                        await Promise.all(deleteQuestionPromises); // Wait for all question deletions to complete
 
                         displayMessage(e.target.closest('li'), 'Subject and related questions deleted.', 'success');
                         // onSnapshot listeners will automatically re-render the UI
@@ -844,6 +861,12 @@
                 return;
             }
 
+            // Ensure Firebase is ready before attempting Firestore write
+            if (!window.isFirebaseReady || !window.db || !window.appId) {
+                displayMessage(questionMessage, 'Firebase not ready. Please wait a moment and try again.', 'error');
+                return;
+            }
+
             const questionImageBase64 = imagePreview.src === '#' ? null : imagePreview.src;
             const correctAnswerIndex = parseInt(correctOptionRadio.value);
 
@@ -853,11 +876,11 @@
                 questionImage: questionImageBase64,
                 options: optionInputs,
                 correctAnswerIndex: correctAnswerIndex,
-                timestamp: firebase.serverTimestamp ? firebase.serverTimestamp() : new Date().toISOString() // Use server timestamp if available
+                timestamp: firebase.serverTimestamp() // Use Firestore's server timestamp
             };
 
             try {
-                const questionsColRef = firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+                const questionsColRef = firebase.collection(window.db, `artifacts/${window.appId}/public/data/questions`);
                 await firebase.addDoc(questionsColRef, newQuestion);
                 // Reset form
                 questionUploadForm.reset();
@@ -937,7 +960,7 @@
                     <td class="py-3 px-6 text-left">${result.studentEmail}</td>
                     <td class="py-3 px-6 text-left">${result.subject}</td>
                     <td class="py-3 px-6 text-left">${result.score} / ${result.totalQuestions} (${((result.score / result.totalQuestions) * 100).toFixed(2)}%)</td>
-                    <td class="py-3 px-6 text-left">${new Date(result.timestamp).toLocaleString()}</td>
+                    <td class="py-3 px-6 text-left">${new Date(result.timestamp.toDate ? result.timestamp.toDate() : result.timestamp).toLocaleString()}</td>
                     <td class="py-3 px-6 text-left">
                         <button data-result-id="${result.id}" class="text-blue-600 hover:text-blue-800 font-semibold view-details-btn">View Details</button>
                     </td>
@@ -980,6 +1003,8 @@
             // Data rows
             examResults.forEach(result => {
                 const percentage = ((result.score / result.totalQuestions) * 100).toFixed(2);
+                // Handle Firestore Timestamp objects for date conversion
+                const dateString = result.timestamp.toDate ? result.timestamp.toDate().toLocaleString() : new Date(result.timestamp).toLocaleString();
                 const row = [
                     `"${result.studentName.replace(/"/g, '""')}"`, // Handle commas and quotes
                     `"${result.studentEmail.replace(/"/g, '""')}"`,
@@ -987,7 +1012,7 @@
                     result.score,
                     result.totalQuestions,
                     `${percentage}%`,
-                    `"${new Date(result.timestamp).toLocaleString().replace(/"/g, '""')}"`
+                    `"${dateString.replace(/"/g, '""')}"`
                 ].join(',');
                 csvContent += row + "\n";
             });
@@ -1007,12 +1032,18 @@
         clearResultsBtn.addEventListener('click', async () => {
             const confirmed = await showConfirmationModal('Are you sure you want to clear ALL exam results? This action cannot be undone.');
             if (confirmed) {
+                // Ensure Firebase is ready before attempting Firestore write
+                if (!window.isFirebaseReady || !window.db || !window.appId) {
+                    displayMessage(clearResultsBtn.parentElement, 'Firebase not ready. Please wait a moment and try again.', 'error');
+                    return;
+                }
+
                 try {
-                    const examResultsColRef = firebase.collection(db, `artifacts/${appId}/public/data/examResults`);
+                    const examResultsColRef = firebase.collection(window.db, `artifacts/${window.appId}/public/data/examResults`);
                     const querySnapshot = await firebase.getDocs(examResultsColRef);
                     const deletePromises = [];
                     querySnapshot.forEach((document) => {
-                        deletePromises.push(firebase.deleteDoc(firebase.doc(db, `artifacts/${appId}/public/data/examResults`, document.id)));
+                        deletePromises.push(firebase.deleteDoc(firebase.doc(window.db, `artifacts/${window.appId}/public/data/examResults`, document.id)));
                     });
                     await Promise.all(deletePromises);
                     displayMessage(clearResultsBtn.parentElement, 'All exam results cleared.', 'success');
@@ -1220,6 +1251,13 @@
                 });
             });
 
+            // Ensure Firebase is ready before attempting Firestore write
+            if (!window.isFirebaseReady || !window.db || !window.appId) {
+                alert('Firebase not ready. Cannot submit exam results.');
+                displayExamResults({ id: generateUniqueId(), ...newResult }); // Still show results to user even if save fails
+                return;
+            }
+
             const newResult = {
                 studentName: currentStudentName,
                 studentEmail: currentStudentEmail,
@@ -1227,11 +1265,11 @@
                 score: score,
                 totalQuestions: currentExamQuestions.length,
                 answers: detailedAnswers,
-                timestamp: firebase.serverTimestamp ? firebase.serverTimestamp() : new Date().toISOString() // Use server timestamp if available
+                timestamp: firebase.serverTimestamp() // Use Firestore's server timestamp
             };
 
             try {
-                const examResultsColRef = firebase.collection(db, `artifacts/${appId}/public/data/examResults`);
+                const examResultsColRef = firebase.collection(window.db, `artifacts/${window.appId}/public/data/examResults`);
                 await firebase.addDoc(examResultsColRef, newResult);
                 displayExamResults({ id: generateUniqueId(), ...newResult }); // Pass the result to display
                 if (isAutoSubmit) {
