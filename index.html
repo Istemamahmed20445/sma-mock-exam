@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Exam System</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles to enhance Tailwind defaults and add depth/animations */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(to right bottom, #e0f2fe, #bfdbfe); /* Light blue gradient */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+            color: #374151; /* Default text color */
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1.5rem; /* More rounded corners */
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* Stronger shadow */
+            padding: 3rem; /* Increased padding */
+            width: 100%;
+            max-width: 900px;
+            margin-top: 30px; /* More margin from top */
+            margin-bottom: 30px;
+            animation: fadeIn 0.5s ease-out; /* Fade-in animation for panels */
+        }
+
+        /* Keyframe for fade-in animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn-primary {
+            @apply bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:from-blue-600 hover:to-blue-700 transition transform hover:-translate-y-1 active:translate-y-0 duration-300 ease-in-out;
+            border: none; /* Ensure no default button border */
+        }
+        .btn-secondary {
+            @apply bg-gray-200 text-gray-800 font-semibold py-3 px-6 rounded-xl shadow-md hover:bg-gray-300 transition transform hover:-translate-y-0.5 active:translate-y-0 duration-300 ease-in-out;
+            border: none; /* Ensure no default button border */
+        }
+        .input-field {
+            @apply mt-1 block w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-base; /* Larger padding, rounded, slightly larger text */
+        }
+        .label-text {
+            @apply block text-sm font-medium text-gray-700 mb-1; /* Added margin-bottom */
+        }
+        .option-label {
+            @apply flex items-center p-4 border border-gray-300 rounded-xl cursor-pointer hover:bg-blue-50 transition duration-200 ease-in-out; /* Larger padding, more rounded */
+        }
+        .option-radio {
+            @apply h-5 w-5 text-blue-600 border-gray-300 focus:ring-blue-500; /* Slightly larger radio buttons */
+        }
+        .correct-answer-highlight {
+            background-color: #d1fae5; /* Green-50 */
+            border-color: #34d399; /* Green-400 */
+            border-width: 2px; /* Thicker border */
+        }
+        .wrong-answer-highlight {
+            background-color: #fee2e2; /* Red-50 */
+            border-color: #ef4444; /* Red-400 */
+            border-width: 2px; /* Thicker border */
+        }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Specific styles for panel transitions */
+        .panel {
+            animation: fadeIn 0.5s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Main Navigation -->
+        <div class="flex justify-center mb-8 space-x-6"> <!-- Increased spacing -->
+            <button id="show-admin-login-btn" class="btn-primary">Admin Panel</button>
+            <button id="show-student-entry-btn" class="btn-primary">Take Exam</button>
+        </div>
+
+        <!-- Admin Login Panel -->
+        <div id="admin-login-panel" class="panel">
+            <h2 class="text-4xl font-extrabold text-gray-900 mb-8 text-center">Admin Login</h2> <!-- Larger, bolder heading -->
+            <form id="admin-login-form" class="space-y-6"> <!-- Increased spacing -->
+                <div>
+                    <label for="admin-id" class="label-text">Admin ID:</label>
+                    <input type="text" id="admin-id" class="input-field" required>
+                </div>
+                <div>
+                    <label for="admin-password" class="label-text">Password:</label>
+                    <input type="password" id="admin-password" class="input-field" required>
+                </div>
+                <button type="submit" class="btn-primary w-full">Login</button>
+            </form>
+            <p id="admin-login-message" class="text-red-500 text-center mt-6 font-medium"></p> <!-- Larger margin, medium font -->
+        </div>
+
+        <!-- Admin Dashboard Panel -->
+        <div id="admin-dashboard-panel" class="panel hidden">
+            <h2 class="text-4xl font-extrabold text-gray-900 mb-8 text-center">Admin Dashboard</h2>
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-200"> <!-- Added bottom border -->
+                <h3 class="text-2xl font-semibold text-gray-700">Welcome, Admin!</h3>
+                <button id="admin-logout-btn" class="btn-secondary">Logout</button>
+            </div>
+
+            <!-- Subject Management -->
+            <div class="mb-10 p-8 border border-gray-200 rounded-2xl shadow-lg bg-gray-50"> <!-- More padding, rounded, shadow, light background -->
+                <h3 class="text-3xl font-bold text-gray-800 mb-6">Manage Subjects</h3> <!-- Larger heading -->
+                <form id="add-subject-form" class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mb-6"> <!-- Responsive layout -->
+                    <input type="text" id="new-subject-name" placeholder="New Subject Name" class="input-field flex-grow" required>
+                    <button type="submit" class="btn-primary">Add Subject</button>
+                </form>
+                <div class="max-h-52 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white"> <!-- Slightly larger height -->
+                    <ul id="subject-list" class="list-disc list-inside space-y-2"> <!-- Increased spacing -->
+                        <!-- Subjects will be loaded here -->
+                    </ul>
+                </div>
+            </div>
+
+            <!-- View Questions by Subject Section -->
+            <div class="mb-10 p-8 border border-gray-200 rounded-2xl shadow-lg bg-gray-50">
+                <h3 class="text-3xl font-bold text-gray-800 mb-6">View Questions by Subject</h3>
+                <div class="mb-6">
+                    <label for="view-question-subject-select" class="label-text">Select Subject to View Questions:</label>
+                    <select id="view-question-subject-select" class="input-field" required>
+                        <!-- Subjects will be loaded here -->
+                    </select>
+                </div>
+                <div id="questions-by-subject-container" class="mt-4 space-y-6 max-h-96 overflow-y-auto p-4 border border-gray-200 rounded-lg bg-white"> <!-- Increased spacing, padding -->
+                    <p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>
+                    <!-- Questions for the selected subject will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Question Upload Section -->
+            <div class="mb-10 p-8 border border-gray-200 rounded-2xl shadow-lg bg-gray-50">
+                <h3 class="text-3xl font-bold text-gray-800 mb-6">Upload New Question</h3>
+                <form id="question-upload-form" class="space-y-6">
+                    <div>
+                        <label for="question-subject" class="label-text">Select Subject:</label>
+                        <select id="question-subject" class="input-field" required>
+                            <!-- Subjects will be loaded here -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="question-text" class="label-text">Question Text:</label>
+                        <textarea id="question-text" rows="4" class="input-field" placeholder="Enter your question here..." required></textarea> <!-- More rows, placeholder -->
+                    </div>
+                    <div>
+                        <label for="question-image" class="label-text">Upload Image (Optional):</label>
+                        <input type="file" id="question-image" accept="image/*" class="input-field file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"> <!-- Styled file input -->
+                        <img id="image-preview" src="#" alt="Image Preview" class="mt-4 hidden max-w-sm rounded-lg shadow-md border border-gray-200"> <!-- Larger preview, border -->
+                    </div>
+                    <div id="options-container" class="space-y-4"> <!-- Increased spacing -->
+                        <label class="label-text">Options (Mark Correct Answer):</label>
+                        <div class="flex items-center space-x-3"> <!-- Increased spacing -->
+                            <input type="radio" name="correct-option" value="0" class="option-radio" required>
+                            <input type="text" class="input-field flex-grow option-input" placeholder="Option 1" required>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="radio" name="correct-option" value="1" class="option-radio">
+                            <input type="text" class="input-field flex-grow option-input" placeholder="Option 2" required>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="radio" name="correct-option" value="2" class="option-radio">
+                            <input type="text" class="input-field flex-grow option-input" placeholder="Option 3" required>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="radio" name="correct-option" value="3" class="option-radio">
+                            <input type="text" class="input-field flex-grow option-input" placeholder="Option 4" required>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <input type="radio" name="correct-option" value="4" class="option-radio">
+                            <input type="text" class="input-field flex-grow option-input" placeholder="Option 5" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-primary w-full">Add Question</button>
+                    <p id="question-message" class="text-green-600 text-center mt-6 font-medium"></p>
+                </form>
+            </div>
+
+            <!-- Student Results Section -->
+            <div class="p-8 border border-gray-200 rounded-2xl shadow-lg bg-gray-50">
+                <h3 class="text-3xl font-bold text-gray-800 mb-6">Student Exam Results</h3>
+                <div class="mb-6 flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                    <button id="export-results-btn" class="btn-secondary">Export to CSV</button>
+                    <button id="clear-results-btn" class="btn-primary bg-red-500 hover:bg-red-600 from-red-500 to-red-600 hover:from-red-600 hover:to-red-700">Clear All Results</button> <!-- Red primary button style -->
+                </div>
+                <div class="max-h-96 overflow-y-auto rounded-lg border border-gray-200"> <!-- Added rounded to container -->
+                    <table class="min-w-full bg-white">
+                        <thead>
+                            <tr class="bg-gray-100 text-gray-700 uppercase text-sm leading-normal sticky top-0"> <!-- Sticky header -->
+                                <th class="py-3 px-6 text-left">Name</th>
+                                <th class="py-3 px-6 text-left">Email</th>
+                                <th class="py-3 px-6 text-left">Subject</th>
+                                <th class="py-3 px-6 text-left">Score</th>
+                                <th class="py-3 px-6 text-left">Date</th>
+                                <th class="py-3 px-6 text-left">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-table-body" class="text-gray-700 text-base"> <!-- Slightly larger text -->
+                            <!-- Results will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Entry Panel -->
+        <div id="student-entry-panel" class="panel hidden">
+            <h2 class="text-4xl font-extrabold text-gray-900 mb-8 text-center">Take an Exam</h2>
+            <form id="student-info-form" class="space-y-6">
+                <div>
+                    <label for="student-name" class="label-text">Full Name:</label>
+                    <input type="text" id="student-name" class="input-field" required>
+                </div>
+                <div>
+                    <label for="student-email" class="label-text">Email:</label>
+                    <input type="email" id="student-email" class="input-field" required>
+                </div>
+                <div>
+                    <label for="exam-subject-select" class="label-text">Select Subject:</label>
+                    <select id="exam-subject-select" class="input-field" required>
+                        <!-- Subjects will be loaded here -->
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary w-full">Start Exam</button>
+            </form>
+            <p id="student-entry-message" class="text-red-500 text-center mt-6 font-medium"></p>
+        </div>
+
+        <!-- Exam Panel -->
+        <div id="exam-panel" class="panel hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-8 pb-4 border-b border-gray-200">
+                <h2 class="text-4xl font-extrabold text-gray-900 mb-4 sm:mb-0">Exam</h2>
+                <div class="text-2xl font-bold text-gray-700 bg-blue-100 px-4 py-2 rounded-lg shadow-sm">Time Left: <span id="exam-timer">03:30:00</span></div> <!-- Prominent timer -->
+            </div>
+            <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200"> <!-- Highlighted question box -->
+                <p class="text-xl font-medium text-gray-800 mb-3">Question <span id="current-question-number">1</span> of <span id="total-questions-count">10</span>:</p>
+                <p id="exam-question-text" class="text-gray-900 text-2xl font-semibold mb-4 leading-relaxed"></p> <!-- Larger, relaxed line-height -->
+                <img id="exam-question-image" src="#" alt="Question Image" class="mt-4 hidden max-w-md rounded-lg shadow-md border border-gray-200 mx-auto"> <!-- Centered image -->
+            </div>
+            <div id="exam-options-container" class="space-y-4"> <!-- Increased spacing -->
+                <!-- Options will be loaded here -->
+            </div>
+            <p id="exam-message" class="text-red-500 text-center mt-6 font-medium"></p>
+            <div class="flex justify-between mt-8"> <!-- Increased spacing -->
+                <button id="prev-question-btn" class="btn-secondary">Previous</button>
+                <button id="next-question-btn" class="btn-primary">Next</button>
+                <button id="submit-exam-btn" class="btn-primary hidden bg-green-600 hover:bg-green-700 from-green-500 to-green-600 hover:from-green-600 hover:to-green-700">Submit Exam</button> <!-- Green submit button -->
+            </div>
+        </div>
+
+        <!-- Exam Result Panel -->
+        <div id="exam-result-panel" class="panel hidden">
+            <h2 class="text-4xl font-extrabold text-gray-900 mb-8 text-center">Exam Results</h2>
+            <div class="text-center mb-8 p-6 bg-blue-50 rounded-lg shadow-md border border-blue-200"> <!-- Highlighted result summary -->
+                <p class="text-xl font-semibold text-gray-700 mb-2">Student: <span id="result-student-name" class="font-bold text-gray-900"></span></p>
+                <p class="text-xl font-semibold text-gray-700 mb-4">Email: <span id="result-student-email" class="font-bold text-gray-900"></span></p>
+                <p class="text-3xl font-bold text-gray-800 mt-4">Your Score: <span id="result-score" class="text-blue-600"></span> / <span id="result-total-questions"></span></p>
+                <p id="passing-status" class="text-3xl font-bold mt-4"></p> <!-- Larger passing status -->
+            </div>
+
+            <h3 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Detailed Answers:</h3>
+            <div id="detailed-answers-container" class="space-y-6 max-h-96 overflow-y-auto p-4 border border-gray-200 rounded-lg bg-gray-50"> <!-- Increased spacing, padding, light background -->
+                <!-- Detailed answers will be loaded here -->
+            </div>
+            <div class="flex justify-center mt-8">
+                <button id="back-to-home-btn" class="btn-primary">Back to Home</button>
+            </div>
+        </div>
+
+        <!-- Custom Confirmation Modal -->
+        <div id="confirmation-modal" class="hidden fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50 transition-opacity duration-300"> <!-- Darker overlay, transition -->
+            <div class="bg-white p-10 rounded-2xl shadow-2xl max-w-md w-full text-center transform scale-95 transition-transform duration-300"> <!-- Larger padding, more rounded, stronger shadow, scale animation -->
+                <p id="modal-message" class="text-xl font-semibold text-gray-800 mb-8 leading-relaxed"></p> <!-- Larger text, more spacing -->
+                <div class="flex justify-center space-x-6"> <!-- Increased spacing -->
+                    <button id="modal-confirm-btn" class="btn-primary">Confirm</button>
+                    <button id="modal-cancel-btn" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const adminLoginPanel = document.getElementById('admin-login-panel');
+        const adminDashboardPanel = document.getElementById('admin-dashboard-panel');
+        const studentEntryPanel = document.getElementById('student-entry-panel');
+        const examPanel = document.getElementById('exam-panel');
+        const examResultPanel = document.getElementById('exam-result-panel');
+
+        const showAdminLoginBtn = document.getElementById('show-admin-login-btn');
+        const showStudentEntryBtn = document.getElementById('show-student-entry-btn');
+        const adminLogoutBtn = document.getElementById('admin-logout-btn');
+        const backToHomeBtn = document.getElementById('back-to-home-btn');
+
+        // Admin Login
+        const adminLoginForm = document.getElementById('admin-login-form');
+        const adminIdInput = document.getElementById('admin-id');
+        const adminPasswordInput = document.getElementById('admin-password');
+        const adminLoginMessage = document.getElementById('admin-login-message');
+
+        // Subject Management
+        const addSubjectForm = document.getElementById('add-subject-form');
+        const newSubjectNameInput = document.getElementById('new-subject-name');
+        const subjectListUl = document.getElementById('subject-list');
+        const questionSubjectSelect = document.getElementById('question-subject');
+        const examSubjectSelect = document.getElementById('exam-subject-select');
+        // For viewing questions by subject
+        const viewQuestionSubjectSelect = document.getElementById('view-question-subject-select');
+        const questionsBySubjectContainer = document.getElementById('questions-by-subject-container');
+
+
+        // Question Upload
+        const questionUploadForm = document.getElementById('question-upload-form');
+        const questionTextInput = document.getElementById('question-text');
+        const questionImageInput = document.getElementById('question-image');
+        const imagePreview = document.getElementById('image-preview');
+        const optionsContainer = document.getElementById('options-container');
+        const questionMessage = document.getElementById('question-message');
+
+        // Student Results
+        const resultsTableBody = document.getElementById('results-table-body');
+        const exportResultsBtn = document.getElementById('export-results-btn');
+        const clearResultsBtn = document.getElementById('clear-results-btn');
+
+        // Student Info
+        const studentInfoForm = document.getElementById('student-info-form');
+        const studentNameInput = document.getElementById('student-name');
+        const studentEmailInput = document.getElementById('student-email');
+        const studentEntryMessage = document.getElementById('student-entry-message');
+
+        // Exam Elements
+        const examTimerSpan = document.getElementById('exam-timer');
+        const currentQuestionNumberSpan = document.getElementById('current-question-number');
+        const totalQuestionsCountSpan = document.getElementById('total-questions-count');
+        const examQuestionText = document.getElementById('exam-question-text');
+        const examQuestionImage = document.getElementById('exam-question-image');
+        const examOptionsContainer = document.getElementById('exam-options-container');
+        const examMessage = document.getElementById('exam-message');
+        const prevQuestionBtn = document.getElementById('prev-question-btn');
+        const nextQuestionBtn = document.getElementById('next-question-btn');
+        const submitExamBtn = document.getElementById('submit-exam-btn');
+
+        // Exam Result Elements
+        const resultStudentNameSpan = document.getElementById('result-student-name');
+        const resultStudentEmailSpan = document.getElementById('result-student-email');
+        const resultScoreSpan = document.getElementById('result-score');
+        const resultTotalQuestionsSpan = document.getElementById('result-total-questions');
+        const passingStatusSpan = document.getElementById('passing-status');
+        const detailedAnswersContainer = document.getElementById('detailed-answers-container');
+
+        // Confirmation Modal
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+        const modalCancelBtn = document.getElementById('modal-cancel-btn');
+
+        // Global State Variables
+        const ADMIN_CREDENTIALS = { id: 'admin', password: 'password' };
+        let questions = []; // Stores all questions
+        let subjects = []; // Stores all subjects
+        let examResults = []; // Stores all exam results
+
+        let currentExamQuestions = []; // Questions for the current exam
+        let currentQuestionIndex = 0;
+        let studentAnswers = []; // Stores student's chosen answers for the current exam
+        let examTimerInterval;
+        let timeLeftInSeconds;
+        let currentStudentName = '';
+        let currentStudentEmail = '';
+        let currentExamSubject = '';
+
+        const PASSING_MARK = 80; // 80%
+
+        // --- Utility Functions ---
+
+        /**
+         * Shows a specific panel and hides others.
+         * @param {HTMLElement} panelToShow - The panel to display.
+         */
+        function showPanel(panelToShow) {
+            const panels = [adminLoginPanel, adminDashboardPanel, studentEntryPanel, examPanel, examResultPanel];
+            panels.forEach(panel => {
+                panel.classList.add('hidden');
+                panel.classList.remove('block'); // Ensure it's fully hidden
+            });
+            panelToShow.classList.remove('hidden');
+            panelToShow.classList.add('block'); // Show it with block display
+        }
+
+        /**
+         * Displays a temporary message in a specified element.
+         * @param {HTMLElement} element - The element to display the message in.
+         * @param {string} message - The message text.
+         * @param {string} type - 'success' or 'error' for styling.
+         */
+        function displayMessage(element, message, type) {
+            element.textContent = message;
+            element.classList.remove('text-green-600', 'text-red-500');
+            if (type === 'success') {
+                element.classList.add('text-green-600');
+            } else if (type === 'error') {
+                element.classList.add('text-red-500');
+            }
+            setTimeout(() => {
+                element.textContent = '';
+            }, 3000);
+        }
+
+        /**
+         * Generates a unique ID.
+         * @returns {string} A unique ID.
+         */
+        function generateUniqueId() {
+            return Date.now().toString(36) + Math.random().toString(36).substring(2);
+        }
+
+        /**
+         * Shows a custom confirmation modal.
+         * @param {string} message - The message to display in the modal.
+         * @returns {Promise<boolean>} A promise that resolves to true if confirmed, false if cancelled.
+         */
+        function showConfirmationModal(message) {
+            return new Promise(resolve => {
+                modalMessage.textContent = message;
+                confirmationModal.classList.remove('hidden');
+                confirmationModal.classList.add('flex'); // Ensure flex display for centering
+
+                const confirmHandler = () => {
+                    confirmationModal.classList.add('hidden');
+                    confirmationModal.classList.remove('flex');
+                    modalConfirmBtn.removeEventListener('click', confirmHandler);
+                    modalCancelBtn.removeEventListener('click', cancelHandler);
+                    resolve(true);
+                };
+
+                const cancelHandler = () => {
+                    confirmationModal.classList.add('hidden');
+                    confirmationModal.classList.remove('flex');
+                    modalConfirmBtn.removeEventListener('click', confirmHandler);
+                    modalCancelBtn.removeEventListener('click', cancelHandler);
+                    resolve(false);
+                };
+
+                modalConfirmBtn.addEventListener('click', confirmHandler);
+                modalCancelBtn.addEventListener('click', cancelHandler);
+            });
+        }
+
+        // --- Local Storage Management ---
+
+        /**
+         * Loads data from localStorage.
+         */
+        function loadData() {
+            const storedQuestions = localStorage.getItem('questions');
+            if (storedQuestions) {
+                questions = JSON.parse(storedQuestions);
+            }
+            const storedSubjects = localStorage.getItem('subjects');
+            if (storedSubjects) {
+                subjects = JSON.parse(storedSubjects);
+            }
+            const storedExamResults = localStorage.getItem('examResults');
+            if (storedExamResults) {
+                examResults = JSON.parse(storedExamResults);
+            }
+        }
+
+        /**
+         * Saves data to localStorage.
+         */
+        function saveData() {
+            localStorage.setItem('questions', JSON.stringify(questions));
+            localStorage.setItem('subjects', JSON.stringify(subjects));
+            localStorage.setItem('examResults', JSON.stringify(examResults));
+        }
+
+        // --- Admin Panel Logic ---
+
+        /**
+         * Handles admin login.
+         * @param {Event} e - The form submission event.
+         */
+        adminLoginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const adminId = adminIdInput.value;
+            const adminPassword = adminPasswordInput.value;
+
+            if (adminId === ADMIN_CREDENTIALS.id && adminPassword === ADMIN_CREDENTIALS.password) {
+                showPanel(adminDashboardPanel);
+                adminIdInput.value = '';
+                adminPasswordInput.value = '';
+                adminLoginMessage.textContent = '';
+                renderSubjectsForAdmin();
+                renderResultsTable();
+                populateSubjectDropdowns();
+                // Clear and reset the view questions section when entering dashboard
+                viewQuestionSubjectSelect.value = '';
+                questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+            } else {
+                displayMessage(adminLoginMessage, 'Invalid Admin ID or Password.', 'error');
+            }
+        });
+
+        /**
+         * Handles admin logout.
+         */
+        adminLogoutBtn.addEventListener('click', () => {
+            showPanel(adminLoginPanel);
+        });
+
+        // --- Subject Management Logic ---
+
+        /**
+         * Renders the list of subjects in the admin dashboard.
+         */
+        function renderSubjectsForAdmin() {
+            subjectListUl.innerHTML = '';
+            if (subjects.length === 0) {
+                subjectListUl.innerHTML = '<li class="text-gray-500 py-2">No subjects added yet.</li>';
+            } else {
+                subjects.forEach(subject => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center py-2';
+                    li.innerHTML = `
+                        <span class="text-lg text-gray-800">${subject}</span>
+                        <button data-subject="${subject}" class="text-red-500 hover:text-red-700 text-sm font-semibold ml-2 delete-subject-btn">Delete</button>
+                    `;
+                    subjectListUl.appendChild(li);
+                });
+            }
+        }
+
+        /**
+         * Populates the subject dropdowns in both admin and student panels.
+         */
+        function populateSubjectDropdowns() {
+            questionSubjectSelect.innerHTML = '<option value="">Select a Subject</option>';
+            examSubjectSelect.innerHTML = '<option value="">Select a Subject</option>';
+            viewQuestionSubjectSelect.innerHTML = '<option value="">Select a Subject</option>'; // For admin view questions
+
+            if (subjects.length === 0) {
+                const noSubjectOption = document.createElement('option');
+                noSubjectOption.value = '';
+                noSubjectOption.textContent = 'No subjects available';
+                noSubjectOption.disabled = true;
+                noSubjectOption.selected = true;
+                questionSubjectSelect.appendChild(noSubjectOption.cloneNode(true));
+                examSubjectSelect.appendChild(noSubjectOption.cloneNode(true));
+                viewQuestionSubjectSelect.appendChild(noSubjectOption.cloneNode(true));
+            } else {
+                subjects.forEach(subject => {
+                    const option1 = document.createElement('option');
+                    option1.value = subject;
+                    option1.textContent = subject;
+                    questionSubjectSelect.appendChild(option1);
+
+                    const option2 = document.createElement('option');
+                    option2.value = subject;
+                    option2.textContent = subject;
+                    examSubjectSelect.appendChild(option2);
+
+                    const option3 = document.createElement('option');
+                    option3.value = subject;
+                    option3.textContent = subject;
+                    viewQuestionSubjectSelect.appendChild(option3);
+                });
+            }
+        }
+
+        /**
+         * Handles adding a new subject.
+         * @param {Event} e - The form submission event.
+         */
+        addSubjectForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newSubject = newSubjectNameInput.value.trim();
+            if (newSubject && !subjects.includes(newSubject)) {
+                subjects.push(newSubject);
+                saveData();
+                newSubjectNameInput.value = '';
+                renderSubjectsForAdmin();
+                populateSubjectDropdowns();
+                displayMessage(newSubjectNameInput.nextElementSibling, 'Subject added!', 'success');
+            } else if (subjects.includes(newSubject)) {
+                displayMessage(newSubjectNameInput.nextElementSibling, 'Subject already exists!', 'error');
+            }
+        });
+
+        /**
+         * Handles deleting a subject.
+         * @param {Event} e - The click event.
+         */
+        subjectListUl.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('delete-subject-btn')) {
+                const subjectToDelete = e.target.dataset.subject;
+
+                const confirmed = await showConfirmationModal(`Are you sure you want to delete the subject "${subjectToDelete}"? This will also remove all questions related to this subject.`);
+                if (confirmed) {
+                    subjects = subjects.filter(s => s !== subjectToDelete);
+                    questions = questions.filter(q => q.subject !== subjectToDelete); // Remove questions of this subject
+                    saveData();
+                    renderSubjectsForAdmin();
+                    populateSubjectDropdowns();
+                    // Clear the questions display if the deleted subject was selected
+                    if (viewQuestionSubjectSelect.value === subjectToDelete) {
+                        viewQuestionSubjectSelect.value = '';
+                        questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+                    }
+                    displayMessage(e.target.closest('li'), 'Subject and related questions deleted.', 'success');
+                }
+            }
+        });
+
+        // --- Question Upload Logic ---
+
+        /**
+         * Handles image preview when an image is selected.
+         */
+        questionImageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    imagePreview.src = event.target.result;
+                    imagePreview.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                imagePreview.classList.add('hidden');
+                imagePreview.src = '#';
+            }
+        });
+
+        /**
+         * Handles question upload form submission.
+         * @param {Event} e - The form submission event.
+         */
+        questionUploadForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const subject = questionSubjectSelect.value;
+            const questionText = questionTextInput.value.trim();
+            const optionInputs = Array.from(document.querySelectorAll('.option-input')).map(input => input.value.trim());
+            const correctOptionRadio = document.querySelector('input[name="correct-option"]:checked');
+
+            if (!subject) {
+                displayMessage(questionMessage, 'Please select a subject.', 'error');
+                return;
+            }
+            if (!questionText) {
+                displayMessage(questionMessage, 'Please enter question text.', 'error');
+                return;
+            }
+            if (optionInputs.some(opt => opt === '')) {
+                displayMessage(questionMessage, 'All options must be filled.', 'error');
+                return;
+            }
+            if (!correctOptionRadio) {
+                displayMessage(questionMessage, 'Please select the correct answer.', 'error');
+                return;
+            }
+
+            const questionImageBase64 = imagePreview.src === '#' ? null : imagePreview.src;
+            const correctAnswerIndex = parseInt(correctOptionRadio.value);
+
+            const newQuestion = {
+                id: generateUniqueId(),
+                subject: subject,
+                questionText: questionText,
+                questionImage: questionImageBase64,
+                options: optionInputs,
+                correctAnswerIndex: correctAnswerIndex
+            };
+
+            questions.push(newQuestion);
+            saveData();
+
+            // Reset form
+            questionUploadForm.reset();
+            imagePreview.classList.add('hidden');
+            imagePreview.src = '#';
+            displayMessage(questionMessage, 'Question added successfully!', 'success');
+            // Re-render questions if the current subject is selected in the view section
+            if (viewQuestionSubjectSelect.value === subject) {
+                renderQuestionsBySubject(subject);
+            }
+        });
+
+        // --- View Questions by Subject Logic ---
+
+        /**
+         * Renders questions for the selected subject in the admin panel.
+         * @param {string} subjectName - The name of the subject to display questions for.
+         */
+        function renderQuestionsBySubject(subjectName) {
+            questionsBySubjectContainer.innerHTML = '';
+            const filteredQuestions = questions.filter(q => q.subject === subjectName);
+
+            if (filteredQuestions.length === 0) {
+                questionsBySubjectContainer.innerHTML = `<p class="text-gray-500 text-center py-4">No questions found for "${subjectName}".</p>`;
+                return;
+            }
+
+            filteredQuestions.forEach((question, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'p-5 border border-gray-200 rounded-lg shadow-sm bg-white mb-4'; // Added margin-bottom
+                questionDiv.innerHTML = `
+                    <p class="font-bold text-lg mb-2 text-gray-900">Q${index + 1}: ${question.questionText}</p>
+                    ${question.questionImage ? `<img src="${question.questionImage}" alt="Question Image" class="mt-3 max-w-xs rounded-lg shadow-md mb-4 mx-auto block">` : ''}
+                    <ul class="space-y-2 text-base">
+                        ${question.options.map((option, optIndex) => `
+                            <li class="p-3 rounded-md ${optIndex === question.correctAnswerIndex ? 'bg-green-100 font-semibold text-green-800 border border-green-300' : 'bg-gray-50 border border-gray-100'}">
+                                ${optIndex === question.correctAnswerIndex ? '&#10003; ' : ''} ${option}
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p class="mt-4 text-sm text-gray-600">Correct Answer: Option ${question.correctAnswerIndex + 1}</p>
+                `;
+                questionsBySubjectContainer.appendChild(questionDiv);
+            });
+        }
+
+        /**
+         * Event listener for the subject selection dropdown in the "View Questions by Subject" section.
+         */
+        viewQuestionSubjectSelect.addEventListener('change', (e) => {
+            const selectedSubject = e.target.value;
+            if (selectedSubject) {
+                renderQuestionsBySubject(selectedSubject);
+            } else {
+                questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+            }
+        });
+
+        // --- Student Results Logic (Admin Panel) ---
+
+        /**
+         * Renders the student results table in the admin dashboard.
+         */
+        function renderResultsTable() {
+            resultsTableBody.innerHTML = '';
+            if (examResults.length === 0) {
+                resultsTableBody.innerHTML = '<tr><td colspan="6" class="py-4 px-6 text-center text-gray-500">No exam results yet.</td></tr>';
+                return;
+            }
+
+            examResults.forEach(result => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200 hover:bg-gray-50';
+                tr.innerHTML = `
+                    <td class="py-3 px-6 text-left whitespace-nowrap">${result.studentName}</td>
+                    <td class="py-3 px-6 text-left">${result.studentEmail}</td>
+                    <td class="py-3 px-6 text-left">${result.subject}</td>
+                    <td class="py-3 px-6 text-left">${result.score} / ${result.totalQuestions} (${((result.score / result.totalQuestions) * 100).toFixed(2)}%)</td>
+                    <td class="py-3 px-6 text-left">${new Date(result.timestamp).toLocaleString()}</td>
+                    <td class="py-3 px-6 text-left">
+                        <button data-result-id="${result.id}" class="text-blue-600 hover:text-blue-800 font-semibold view-details-btn">View Details</button>
+                    </td>
+                `;
+                resultsTableBody.appendChild(tr);
+            });
+        }
+
+        /**
+         * Handles viewing detailed results for a student (in admin panel).
+         * This will likely open a modal or new section, but for simplicity, we'll just log to console or show a basic alert.
+         * A more complete implementation would display a detailed breakdown similar to the student's result panel.
+         */
+        resultsTableBody.addEventListener('click', (e) => {
+            if (e.target.classList.contains('view-details-btn')) {
+                const resultId = e.target.dataset.resultId;
+                const result = examResults.find(r => r.id === resultId);
+                if (result) {
+                    // For a full system, you'd render a dedicated modal/panel here.
+                    // For this mock, we'll just show a simplified version or log.
+                    alert(`Details for ${result.studentName} (${result.subject}):\nScore: ${result.score}/${result.totalQuestions}\n\nCheck console for full data.`);
+                    console.log('Full Result Details:', result);
+                }
+            }
+        });
+
+        /**
+         * Exports exam results to a CSV file.
+         */
+        exportResultsBtn.addEventListener('click', () => {
+            if (examResults.length === 0) {
+                alert('No results to export!');
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            // Headers
+            csvContent += "Student Name,Student Email,Subject,Score,Total Questions,Percentage,Date\n";
+
+            // Data rows
+            examResults.forEach(result => {
+                const percentage = ((result.score / result.totalQuestions) * 100).toFixed(2);
+                const row = [
+                    `"${result.studentName.replace(/"/g, '""')}"`, // Handle commas and quotes
+                    `"${result.studentEmail.replace(/"/g, '""')}"`,
+                    `"${result.subject.replace(/"/g, '""')}"`,
+                    result.score,
+                    result.totalQuestions,
+                    `${percentage}%`,
+                    `"${new Date(result.timestamp).toLocaleString().replace(/"/g, '""')}"`
+                ].join(',');
+                csvContent += row + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "exam_results.csv");
+            document.body.appendChild(link); // Required for Firefox
+            link.click();
+            document.body.removeChild(link); // Clean up
+        });
+
+        /**
+         * Clears all stored exam results.
+         */
+        clearResultsBtn.addEventListener('click', async () => {
+            const confirmed = await showConfirmationModal('Are you sure you want to clear ALL exam results? This action cannot be undone.');
+            if (confirmed) {
+                examResults = [];
+                saveData();
+                renderResultsTable();
+                displayMessage(clearResultsBtn.parentElement, 'All exam results cleared.', 'success');
+            }
+        });
+
+        // --- Student Entry Panel Logic ---
+
+        /**
+         * Handles student info form submission and starts the exam.
+         * @param {Event} e - The form submission event.
+         */
+        studentInfoForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            currentStudentName = studentNameInput.value.trim();
+            currentStudentEmail = studentEmailInput.value.trim();
+            currentExamSubject = examSubjectSelect.value;
+
+            if (!currentStudentName || !currentStudentEmail || !currentExamSubject) {
+                displayMessage(studentEntryMessage, 'Please fill in all fields and select a subject.', 'error');
+                return;
+            }
+
+            // Filter questions by selected subject
+            currentExamQuestions = questions.filter(q => q.subject === currentExamSubject);
+
+            if (currentExamQuestions.length === 0) {
+                displayMessage(studentEntryMessage, 'No questions available for this subject. Please choose another or ask admin to add questions.', 'error');
+                return;
+            }
+
+            // Shuffle questions for a new exam experience each time
+            currentExamQuestions.sort(() => Math.random() - 0.5);
+
+            currentQuestionIndex = 0;
+            studentAnswers = Array(currentExamQuestions.length).fill(null); // Initialize with null for unanswered
+            timeLeftInSeconds = 3 * 3600 + 30 * 60; // 3 hours 30 minutes in seconds
+
+            startExam();
+        });
+
+        // --- Exam Panel Logic ---
+
+        /**
+         * Starts the exam, displays the first question, and starts the timer.
+         */
+        function startExam() {
+            showPanel(examPanel);
+            updateQuestionDisplay();
+            startTimer();
+            studentEntryMessage.textContent = ''; // Clear any previous messages
+        }
+
+        /**
+         * Updates the display with the current question and options.
+         */
+        function updateQuestionDisplay() {
+            if (currentQuestionIndex < 0 || currentQuestionIndex >= currentExamQuestions.length) {
+                console.error("Invalid question index.");
+                return;
+            }
+
+            const currentQuestion = currentExamQuestions[currentQuestionIndex];
+
+            currentQuestionNumberSpan.textContent = currentQuestionIndex + 1;
+            totalQuestionsCountSpan.textContent = currentExamQuestions.length;
+            examQuestionText.textContent = currentQuestion.questionText;
+
+            if (currentQuestion.questionImage) {
+                examQuestionImage.src = currentQuestion.questionImage;
+                examQuestionImage.classList.remove('hidden');
+            } else {
+                examQuestionImage.classList.add('hidden');
+                examQuestionImage.src = '#';
+            }
+
+            examOptionsContainer.innerHTML = '';
+            currentQuestion.options.forEach((option, index) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option-label';
+                optionDiv.innerHTML = `
+                    <input type="radio" name="exam-option" value="${index}" id="option-${index}" class="option-radio mr-2">
+                    <label for="option-${index}" class="text-gray-800 text-base flex-grow">${option}</label>
+                `;
+                examOptionsContainer.appendChild(optionDiv);
+
+                // Pre-select if student has already answered this question
+                if (studentAnswers[currentQuestionIndex] !== null && studentAnswers[currentQuestionIndex] === index) {
+                    optionDiv.querySelector(`#option-${index}`).checked = true;
+                }
+            });
+
+            // Update navigation button states
+            prevQuestionBtn.disabled = currentQuestionIndex === 0;
+            nextQuestionBtn.classList.remove('hidden');
+            submitExamBtn.classList.add('hidden');
+
+            if (currentQuestionIndex === currentExamQuestions.length - 1) {
+                nextQuestionBtn.classList.add('hidden');
+                submitExamBtn.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Handles selecting an answer during the exam.
+         * @param {Event} e - The change event from a radio button.
+         */
+        examOptionsContainer.addEventListener('change', (e) => {
+            if (e.target.name === 'exam-option') {
+                studentAnswers[currentQuestionIndex] = parseInt(e.target.value);
+                examMessage.textContent = ''; // Clear any previous "please select an answer" message
+            }
+        });
+
+        /**
+         * Handles navigating to the previous question.
+         */
+        prevQuestionBtn.addEventListener('click', () => {
+            if (currentQuestionIndex > 0) {
+                currentQuestionIndex--;
+                updateQuestionDisplay();
+            }
+        });
+
+        /**
+         * Handles navigating to the next question.
+         */
+        nextQuestionBtn.addEventListener('click', () => {
+            if (studentAnswers[currentQuestionIndex] === null) {
+                displayMessage(examMessage, 'Please select an answer before proceeding.', 'error');
+                return;
+            }
+            if (currentQuestionIndex < currentExamQuestions.length - 1) {
+                currentQuestionIndex++;
+                updateQuestionDisplay();
+            }
+        });
+
+        /**
+         * Starts the exam timer.
+         */
+        function startTimer() {
+            clearInterval(examTimerInterval); // Clear any existing timer
+            examTimerInterval = setInterval(() => {
+                timeLeftInSeconds--;
+                const hours = Math.floor(timeLeftInSeconds / 3600);
+                const minutes = Math.floor((timeLeftInSeconds % 3600) / 60);
+                const seconds = timeLeftInSeconds % 60;
+
+                examTimerSpan.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+                if (timeLeftInSeconds <= 0) {
+                    clearInterval(examTimerInterval);
+                    submitExam(true); // Auto-submit
+                }
+            }, 1000);
+        }
+
+        /**
+         * Handles manual exam submission.
+         */
+        submitExamBtn.addEventListener('click', async () => {
+            if (studentAnswers[currentQuestionIndex] === null) {
+                displayMessage(examMessage, 'Please select an answer for the current question before submitting.', 'error');
+                return;
+            }
+            const confirmed = await showConfirmationModal('Are you sure you want to submit the exam?');
+            if (confirmed) {
+                submitExam(false);
+            }
+        });
+
+        /**
+         * Submits the exam, calculates score, and displays results.
+         * @param {boolean} isAutoSubmit - True if submitted automatically by timer, false otherwise.
+         */
+        function submitExam(isAutoSubmit) {
+            clearInterval(examTimerInterval); // Stop the timer
+
+            let score = 0;
+            const detailedAnswers = [];
+
+            currentExamQuestions.forEach((question, index) => {
+                const chosenAnswerIndex = studentAnswers[index];
+                const isCorrect = chosenAnswerIndex === question.correctAnswerIndex;
+
+                if (isCorrect) {
+                    score++;
+                }
+
+                detailedAnswers.push({
+                    questionId: question.id,
+                    questionText: question.questionText,
+                    questionImage: question.questionImage,
+                    options: question.options,
+                    chosenAnswerIndex: chosenAnswerIndex,
+                    correctAnswerIndex: question.correctAnswerIndex,
+                    isCorrect: isCorrect
+                });
+            });
+
+            const newResult = {
+                id: generateUniqueId(),
+                studentName: currentStudentName,
+                studentEmail: currentStudentEmail,
+                subject: currentExamSubject,
+                score: score,
+                totalQuestions: currentExamQuestions.length,
+                answers: detailedAnswers,
+                timestamp: new Date().toISOString()
+            };
+
+            examResults.push(newResult);
+            saveData();
+
+            displayExamResults(newResult);
+            if (isAutoSubmit) {
+                alert('Time is up! Your exam has been automatically submitted.');
+            }
+        }
+
+        // --- Exam Result Panel Logic ---
+
+        /**
+         * Displays the exam results to the student.
+         * @param {object} result - The result object for the current exam.
+         */
+        function displayExamResults(result) {
+            showPanel(examResultPanel);
+
+            resultStudentNameSpan.textContent = result.studentName;
+            resultStudentEmailSpan.textContent = result.studentEmail;
+            resultScoreSpan.textContent = result.score;
+            resultTotalQuestionsSpan.textContent = result.totalQuestions;
+
+            const percentage = (result.score / result.totalQuestions) * 100;
+            if (percentage >= PASSING_MARK) {
+                passingStatusSpan.textContent = `Passed! (${percentage.toFixed(2)}%)`;
+                passingStatusSpan.className = 'text-3xl font-bold mt-4 text-green-600';
+            } else {
+                passingStatusSpan.textContent = `Failed (${percentage.toFixed(2)}%)`;
+                passingStatusSpan.className = 'text-3xl font-bold mt-4 text-red-600';
+            }
+
+            detailedAnswersContainer.innerHTML = '';
+            result.answers.forEach((answer, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'p-5 border rounded-lg shadow-sm';
+
+                const isAnsweredCorrectly = answer.isCorrect;
+                const chosenOptionText = answer.chosenAnswerIndex !== null ? answer.options[answer.chosenAnswerIndex] : 'No Answer';
+                const correctAnswerText = answer.options[answer.correctAnswerIndex];
+
+                questionDiv.classList.add(isAnsweredCorrectly ? 'correct-answer-highlight' : 'wrong-answer-highlight');
+                questionDiv.classList.add('border-l-4'); // Add a thicker border on the left
+
+                questionDiv.innerHTML = `
+                    <p class="font-bold text-lg mb-2 text-gray-900">Q${index + 1}: ${answer.questionText}</p>
+                    ${answer.questionImage ? `<img src="${answer.questionImage}" alt="Question Image" class="mt-3 max-w-xs rounded-lg shadow-md mb-4 mx-auto block">` : ''}
+                    <ul class="space-y-2 text-base">
+                        ${answer.options.map((option, optIndex) => `
+                            <li class="p-3 rounded-md ${optIndex === answer.correctAnswerIndex ? 'bg-green-100 font-semibold border border-green-300' : ''} ${optIndex === answer.chosenAnswerIndex && !isAnsweredCorrectly ? 'bg-red-100 font-semibold border border-red-300' : ''}">
+                                ${optIndex === answer.chosenAnswerIndex ? '&#10003; ' : ''} <!-- Checkmark for chosen -->
+                                ${option}
+                                ${optIndex === answer.correctAnswerIndex && optIndex !== answer.chosenAnswerIndex ? ' (Correct)' : ''}
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p class="mt-4 text-sm">
+                        Your Answer: <span class="${isAnsweredCorrectly ? 'text-green-700' : 'text-red-700'} font-semibold">${chosenOptionText}</span><br>
+                        Correct Answer: <span class="text-green-700 font-semibold">${correctAnswerText}</span>
+                    </p>
+                `;
+                detailedAnswersContainer.appendChild(questionDiv);
+            });
+        }
+
+        /**
+         * Handles clicking the "Back to Home" button from the results panel.
+         */
+        backToHomeBtn.addEventListener('click', () => {
+            showPanel(studentEntryPanel); // Go back to student entry to take another exam
+            studentInfoForm.reset(); // Clear student info form
+            clearInterval(examTimerInterval); // Ensure timer is stopped
+        });
+
+        // --- Initial Setup and Event Listeners ---
+
+        // Main navigation buttons
+        showAdminLoginBtn.addEventListener('click', () => showPanel(adminLoginPanel));
+        showStudentEntryBtn.addEventListener('click', () => {
+            showPanel(studentEntryPanel);
+            populateSubjectDropdowns(); // Ensure subjects are loaded for student
+        });
+
+        // Initial load
+        loadData();
+        showPanel(studentEntryPanel); // Default to student entry panel
+        populateSubjectDropdowns(); // Populate dropdowns on initial load
+
+    </script>
+</body>
+</html>
