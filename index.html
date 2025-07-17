@@ -7,6 +7,80 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Firebase SDK CDN -->
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Define global variables for Firebase instances
+        window.firebaseApp = null;
+        window.db = null;
+        window.auth = null;
+        window.currentUserId = null;
+        window.isFirebaseReady = false; // Flag to indicate Firebase is initialized and auth state is known
+
+        // Initialize Firebase and set up authentication listener
+        async function initializeFirebase() {
+            try {
+                // __firebase_config and __app_id are provided by the Canvas environment
+                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+                window.firebaseApp = initializeApp(firebaseConfig);
+                window.db = getFirestore(window.firebaseApp);
+                window.auth = getAuth(window.firebaseApp);
+                window.appId = appId; // Make appId globally available
+
+                // Listen for authentication state changes
+                onAuthStateChanged(window.auth, async (user) => {
+                    if (user) {
+                        window.currentUserId = user.uid;
+                        console.log("Firebase Authenticated. User ID:", window.currentUserId);
+                    } else {
+                        // Sign in anonymously if no user is found (e.g., if __initial_auth_token is not present)
+                        console.log("No user found, attempting anonymous sign-in...");
+                        try {
+                            // __initial_auth_token is provided by the Canvas environment
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(window.auth, __initial_auth_token);
+                                console.log("Signed in with custom token.");
+                            } else {
+                                await signInAnonymously(window.auth);
+                                console.log("Signed in anonymously.");
+                            }
+                            window.currentUserId = window.auth.currentUser.uid;
+                            console.log("Firebase Authenticated. User ID:", window.currentUserId);
+                        } catch (error) {
+                            console.error("Firebase authentication failed:", error);
+                            // Fallback to a random ID if authentication completely fails
+                            window.currentUserId = crypto.randomUUID();
+                            console.warn("Using a random UUID for user ID due to auth failure:", window.currentUserId);
+                        }
+                    }
+                    window.isFirebaseReady = true; // Mark Firebase as ready after auth state is determined
+                    document.dispatchEvent(new CustomEvent('firebaseReady')); // Dispatch event for other scripts
+                    document.getElementById('current-user-id-display').textContent = window.currentUserId; // Display user ID
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                // If Firebase initialization fails completely, still set a random user ID
+                window.currentUserId = crypto.randomUUID();
+                window.isFirebaseReady = true;
+                document.dispatchEvent(new CustomEvent('firebaseReady'));
+                document.getElementById('current-user-id-display').textContent = window.currentUserId;
+            }
+        }
+
+        initializeFirebase();
+
+        // Make Firestore functions available globally or via window object for easier access in the main script
+        window.firebase = {
+            getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy
+        };
+    </script>
     <style>
         /* Custom styles to enhance Tailwind defaults and add depth/animations */
         body {
@@ -97,6 +171,11 @@
         <div class="flex justify-center mb-8 space-x-6"> <!-- Increased spacing -->
             <button id="show-admin-login-btn" class="btn-primary">Admin Panel</button>
             <button id="show-student-entry-btn" class="btn-primary">Take Exam</button>
+        </div>
+
+        <!-- Current User ID Display (for debugging/info) -->
+        <div class="text-center text-sm text-gray-500 mb-4">
+            Current User ID: <span id="current-user-id-display" class="font-mono">Loading...</span>
         </div>
 
         <!-- Admin Login Panel -->
@@ -305,6 +384,10 @@
     </div>
 
     <script>
+        // Global State Variables (now primarily for UI rendering, data comes from Firestore)
+        // Moved ADMIN_CREDENTIALS to a global scope so it's accessible by the adminLoginForm event listener
+        const ADMIN_CREDENTIALS = { id: 'admin', password: 'password' };
+
         // DOM Elements
         const adminLoginPanel = document.getElementById('admin-login-panel');
         const adminDashboardPanel = document.getElementById('admin-dashboard-panel');
@@ -379,15 +462,14 @@
         const modalConfirmBtn = document.getElementById('modal-confirm-btn');
         const modalCancelBtn = document.getElementById('modal-cancel-btn');
 
-        // Global State Variables
-        const ADMIN_CREDENTIALS = { id: 'admin', password: 'password' };
-        let questions = []; // Stores all questions
-        let subjects = []; // Stores all subjects
-        let examResults = []; // Stores all exam results
+        // Global State Variables (now primarily for UI rendering, data comes from Firestore)
+        let questions = [];
+        let subjects = [];
+        let examResults = [];
 
-        let currentExamQuestions = []; // Questions for the current exam
+        let currentExamQuestions = [];
         let currentQuestionIndex = 0;
-        let studentAnswers = []; // Stores student's chosen answers for the current exam
+        let studentAnswers = [];
         let examTimerInterval;
         let timeLeftInSeconds;
         let currentStudentName = '';
@@ -395,6 +477,11 @@
         let currentExamSubject = '';
 
         const PASSING_MARK = 80; // 80%
+
+        // Firestore references
+        let db;
+        let appId;
+        let currentUserId;
 
         // --- Utility Functions ---
 
@@ -471,34 +558,69 @@
             });
         }
 
-        // --- Local Storage Management ---
+        // --- Firebase Data Management ---
 
         /**
-         * Loads data from localStorage.
+         * Initializes Firestore and sets up real-time listeners for data.
+         * This function is called once Firebase is ready.
          */
-        function loadData() {
-            const storedQuestions = localStorage.getItem('questions');
-            if (storedQuestions) {
-                questions = JSON.parse(storedQuestions);
-            }
-            const storedSubjects = localStorage.getItem('subjects');
-            if (storedSubjects) {
-                subjects = JSON.parse(storedSubjects);
-            }
-            const storedExamResults = localStorage.getItem('examResults');
-            if (storedExamResults) {
-                examResults = JSON.parse(storedExamResults);
-            }
-        }
+        document.addEventListener('firebaseReady', () => {
+            db = window.db;
+            appId = window.appId;
+            currentUserId = window.currentUserId;
 
-        /**
-         * Saves data to localStorage.
-         */
-        function saveData() {
-            localStorage.setItem('questions', JSON.stringify(questions));
-            localStorage.setItem('subjects', JSON.stringify(subjects));
-            localStorage.setItem('examResults', JSON.stringify(examResults));
-        }
+            if (!db || !appId || !currentUserId) {
+                console.error("Firebase not fully initialized. Cannot set up listeners.");
+                return;
+            }
+
+            // Real-time listener for Subjects
+            const subjectsColRef = firebase.collection(db, `artifacts/${appId}/public/data/subjects`);
+            firebase.onSnapshot(subjectsColRef, (snapshot) => {
+                subjects = [];
+                snapshot.forEach(doc => {
+                    subjects.push(doc.data().name);
+                });
+                console.log("Subjects updated:", subjects);
+                renderSubjectsForAdmin();
+                populateSubjectDropdowns();
+            }, (error) => {
+                console.error("Error fetching subjects:", error);
+            });
+
+            // Real-time listener for Questions
+            const questionsColRef = firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+            firebase.onSnapshot(questionsColRef, (snapshot) => {
+                questions = [];
+                snapshot.forEach(doc => {
+                    questions.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("Questions updated:", questions);
+                // Re-render questions if a subject is currently selected in the admin view
+                if (viewQuestionSubjectSelect.value) {
+                    renderQuestionsBySubject(viewQuestionSubjectSelect.value);
+                }
+            }, (error) => {
+                console.error("Error fetching questions:", error);
+            });
+
+            // Real-time listener for Exam Results
+            const examResultsColRef = firebase.collection(db, `artifacts/${appId}/public/data/examResults`);
+            firebase.onSnapshot(examResultsColRef, (snapshot) => {
+                examResults = [];
+                snapshot.forEach(doc => {
+                    examResults.push({ id: doc.id, ...doc.data() });
+                });
+                console.log("Exam Results updated:", examResults);
+                renderResultsTable();
+            }, (error) => {
+                console.error("Error fetching exam results:", error);
+            });
+
+            // Show default panel after Firebase is ready
+            showPanel(studentEntryPanel);
+        });
+
 
         // --- Admin Panel Logic ---
 
@@ -512,16 +634,17 @@
             const adminPassword = adminPasswordInput.value;
 
             if (adminId === ADMIN_CREDENTIALS.id && adminPassword === ADMIN_CREDENTIALS.password) {
-                showPanel(adminDashboardPanel);
-                adminIdInput.value = '';
-                adminPasswordInput.value = '';
-                adminLoginMessage.textContent = '';
-                renderSubjectsForAdmin();
-                renderResultsTable();
-                populateSubjectDropdowns();
-                // Clear and reset the view questions section when entering dashboard
-                viewQuestionSubjectSelect.value = '';
-                questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+                if (window.isFirebaseReady) {
+                    showPanel(adminDashboardPanel);
+                    adminIdInput.value = '';
+                    adminPasswordInput.value = '';
+                    adminLoginMessage.textContent = '';
+                    // Data will be rendered by onSnapshot listeners
+                    viewQuestionSubjectSelect.value = '';
+                    questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+                } else {
+                    displayMessage(adminLoginMessage, 'Firebase is still initializing. Please wait a moment.', 'error');
+                }
             } else {
                 displayMessage(adminLoginMessage, 'Invalid Admin ID or Password.', 'error');
             }
@@ -560,9 +683,14 @@
          * Populates the subject dropdowns in both admin and student panels.
          */
         function populateSubjectDropdowns() {
+            // Store current selected values to restore after repopulating
+            const currentQuestionSubject = questionSubjectSelect.value;
+            const currentExamSubject = examSubjectSelect.value;
+            const currentViewSubject = viewQuestionSubjectSelect.value;
+
             questionSubjectSelect.innerHTML = '<option value="">Select a Subject</option>';
             examSubjectSelect.innerHTML = '<option value="">Select a Subject</option>';
-            viewQuestionSubjectSelect.innerHTML = '<option value="">Select a Subject</option>'; // For admin view questions
+            viewQuestionSubjectSelect.innerHTML = '<option value="">Select a Subject</option>';
 
             if (subjects.length === 0) {
                 const noSubjectOption = document.createElement('option');
@@ -591,29 +719,42 @@
                     viewQuestionSubjectSelect.appendChild(option3);
                 });
             }
+
+            // Restore previously selected values
+            questionSubjectSelect.value = currentQuestionSubject;
+            examSubjectSelect.value = currentExamSubject;
+            viewQuestionSubjectSelect.value = currentViewSubject;
         }
 
         /**
-         * Handles adding a new subject.
+         * Handles adding a new subject to Firestore.
          * @param {Event} e - The form submission event.
          */
-        addSubjectForm.addEventListener('submit', (e) => {
+        addSubjectForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const newSubject = newSubjectNameInput.value.trim();
-            if (newSubject && !subjects.includes(newSubject)) {
-                subjects.push(newSubject);
-                saveData();
-                newSubjectNameInput.value = '';
-                renderSubjectsForAdmin();
-                populateSubjectDropdowns();
-                displayMessage(newSubjectNameInput.nextElementSibling, 'Subject added!', 'success');
-            } else if (subjects.includes(newSubject)) {
+            if (!newSubject) {
+                displayMessage(newSubjectNameInput.nextElementSibling, 'Subject name cannot be empty.', 'error');
+                return;
+            }
+            if (subjects.includes(newSubject)) {
                 displayMessage(newSubjectNameInput.nextElementSibling, 'Subject already exists!', 'error');
+                return;
+            }
+
+            try {
+                const subjectsColRef = firebase.collection(db, `artifacts/${appId}/public/data/subjects`);
+                await firebase.addDoc(subjectsColRef, { name: newSubject });
+                newSubjectNameInput.value = '';
+                displayMessage(newSubjectNameInput.nextElementSibling, 'Subject added!', 'success');
+            } catch (error) {
+                console.error("Error adding subject:", error);
+                displayMessage(newSubjectNameInput.nextElementSibling, 'Error adding subject. Please try again.', 'error');
             }
         });
 
         /**
-         * Handles deleting a subject.
+         * Handles deleting a subject from Firestore.
          * @param {Event} e - The click event.
          */
         subjectListUl.addEventListener('click', async (e) => {
@@ -622,17 +763,34 @@
 
                 const confirmed = await showConfirmationModal(`Are you sure you want to delete the subject "${subjectToDelete}"? This will also remove all questions related to this subject.`);
                 if (confirmed) {
-                    subjects = subjects.filter(s => s !== subjectToDelete);
-                    questions = questions.filter(q => q.subject !== subjectToDelete); // Remove questions of this subject
-                    saveData();
-                    renderSubjectsForAdmin();
-                    populateSubjectDropdowns();
-                    // Clear the questions display if the deleted subject was selected
-                    if (viewQuestionSubjectSelect.value === subjectToDelete) {
-                        viewQuestionSubjectSelect.value = '';
-                        questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+                    try {
+                        // Delete subject document
+                        const subjectsColRef = firebase.collection(db, `artifacts/${appId}/public/data/subjects`);
+                        const q = firebase.query(subjectsColRef, firebase.where("name", "==", subjectToDelete));
+                        const querySnapshot = await firebase.getDocs(q);
+                        querySnapshot.forEach(async (document) => {
+                            await firebase.deleteDoc(firebase.doc(db, `artifacts/${appId}/public/data/subjects`, document.id));
+                        });
+
+                        // Delete all questions associated with this subject
+                        const questionsColRef = firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+                        const qQuestions = firebase.query(questionsColRef, firebase.where("subject", "==", subjectToDelete));
+                        const questionSnapshot = await firebase.getDocs(qQuestions);
+                        questionSnapshot.forEach(async (document) => {
+                            await firebase.deleteDoc(firebase.doc(db, `artifacts/${appId}/public/data/questions`, document.id));
+                        });
+
+                        displayMessage(e.target.closest('li'), 'Subject and related questions deleted.', 'success');
+                        // onSnapshot listeners will automatically re-render the UI
+                        // Clear the questions display if the deleted subject was selected
+                        if (viewQuestionSubjectSelect.value === subjectToDelete) {
+                            viewQuestionSubjectSelect.value = '';
+                            questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
+                        }
+                    } catch (error) {
+                        console.error("Error deleting subject or questions:", error);
+                        displayMessage(e.target.closest('li'), 'Error deleting subject. Please try again.', 'error');
                     }
-                    displayMessage(e.target.closest('li'), 'Subject and related questions deleted.', 'success');
                 }
             }
         });
@@ -658,10 +816,10 @@
         });
 
         /**
-         * Handles question upload form submission.
+         * Handles question upload form submission to Firestore.
          * @param {Event} e - The form submission event.
          */
-        questionUploadForm.addEventListener('submit', (e) => {
+        questionUploadForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const subject = questionSubjectSelect.value;
@@ -690,25 +848,26 @@
             const correctAnswerIndex = parseInt(correctOptionRadio.value);
 
             const newQuestion = {
-                id: generateUniqueId(),
                 subject: subject,
                 questionText: questionText,
                 questionImage: questionImageBase64,
                 options: optionInputs,
-                correctAnswerIndex: correctAnswerIndex
+                correctAnswerIndex: correctAnswerIndex,
+                timestamp: firebase.serverTimestamp ? firebase.serverTimestamp() : new Date().toISOString() // Use server timestamp if available
             };
 
-            questions.push(newQuestion);
-            saveData();
-
-            // Reset form
-            questionUploadForm.reset();
-            imagePreview.classList.add('hidden');
-            imagePreview.src = '#';
-            displayMessage(questionMessage, 'Question added successfully!', 'success');
-            // Re-render questions if the current subject is selected in the view section
-            if (viewQuestionSubjectSelect.value === subject) {
-                renderQuestionsBySubject(subject);
+            try {
+                const questionsColRef = firebase.collection(db, `artifacts/${appId}/public/data/questions`);
+                await firebase.addDoc(questionsColRef, newQuestion);
+                // Reset form
+                questionUploadForm.reset();
+                imagePreview.classList.add('hidden');
+                imagePreview.src = '#';
+                displayMessage(questionMessage, 'Question added successfully!', 'success');
+                // onSnapshot listener will automatically re-render questions if needed
+            } catch (error) {
+                console.error("Error adding question:", error);
+                displayMessage(questionMessage, 'Error adding question. Please try again.', 'error');
             }
         });
 
@@ -729,7 +888,7 @@
 
             filteredQuestions.forEach((question, index) => {
                 const questionDiv = document.createElement('div');
-                questionDiv.className = 'p-5 border border-gray-200 rounded-lg shadow-sm bg-white mb-4'; // Added margin-bottom
+                questionDiv.className = 'p-5 border border-gray-200 rounded-lg shadow-sm bg-white mb-4';
                 questionDiv.innerHTML = `
                     <p class="font-bold text-lg mb-2 text-gray-900">Q${index + 1}: ${question.questionText}</p>
                     ${question.questionImage ? `<img src="${question.questionImage}" alt="Question Image" class="mt-3 max-w-xs rounded-lg shadow-md mb-4 mx-auto block">` : ''}
@@ -843,15 +1002,25 @@
         });
 
         /**
-         * Clears all stored exam results.
+         * Clears all stored exam results from Firestore.
          */
         clearResultsBtn.addEventListener('click', async () => {
             const confirmed = await showConfirmationModal('Are you sure you want to clear ALL exam results? This action cannot be undone.');
             if (confirmed) {
-                examResults = [];
-                saveData();
-                renderResultsTable();
-                displayMessage(clearResultsBtn.parentElement, 'All exam results cleared.', 'success');
+                try {
+                    const examResultsColRef = firebase.collection(db, `artifacts/${appId}/public/data/examResults`);
+                    const querySnapshot = await firebase.getDocs(examResultsColRef);
+                    const deletePromises = [];
+                    querySnapshot.forEach((document) => {
+                        deletePromises.push(firebase.deleteDoc(firebase.doc(db, `artifacts/${appId}/public/data/examResults`, document.id)));
+                    });
+                    await Promise.all(deletePromises);
+                    displayMessage(clearResultsBtn.parentElement, 'All exam results cleared.', 'success');
+                    // onSnapshot listener will automatically re-render the table
+                } catch (error) {
+                    console.error("Error clearing exam results:", error);
+                    displayMessage(clearResultsBtn.parentElement, 'Error clearing results. Please try again.', 'error');
+                }
             }
         });
 
@@ -874,15 +1043,15 @@
             }
 
             // Filter questions by selected subject
-            currentExamQuestions = questions.filter(q => q.subject === currentExamSubject);
+            const filteredQuestions = questions.filter(q => q.subject === currentExamSubject);
 
-            if (currentExamQuestions.length === 0) {
+            if (filteredQuestions.length === 0) {
                 displayMessage(studentEntryMessage, 'No questions available for this subject. Please choose another or ask admin to add questions.', 'error');
                 return;
             }
 
             // Shuffle questions for a new exam experience each time
-            currentExamQuestions.sort(() => Math.random() - 0.5);
+            currentExamQuestions = filteredQuestions.sort(() => Math.random() - 0.5);
 
             currentQuestionIndex = 0;
             studentAnswers = Array(currentExamQuestions.length).fill(null); // Initialize with null for unanswered
@@ -900,7 +1069,7 @@
             showPanel(examPanel);
             updateQuestionDisplay();
             startTimer();
-            studentEntryMessage.textContent = ''; // Clear any previous messages
+            examMessage.textContent = ''; // Clear any previous messages
         }
 
         /**
@@ -1023,10 +1192,10 @@
         });
 
         /**
-         * Submits the exam, calculates score, and displays results.
+         * Submits the exam, calculates score, and saves results to Firestore.
          * @param {boolean} isAutoSubmit - True if submitted automatically by timer, false otherwise.
          */
-        function submitExam(isAutoSubmit) {
+        async function submitExam(isAutoSubmit) {
             clearInterval(examTimerInterval); // Stop the timer
 
             let score = 0;
@@ -1052,22 +1221,27 @@
             });
 
             const newResult = {
-                id: generateUniqueId(),
                 studentName: currentStudentName,
                 studentEmail: currentStudentEmail,
                 subject: currentExamSubject,
                 score: score,
                 totalQuestions: currentExamQuestions.length,
                 answers: detailedAnswers,
-                timestamp: new Date().toISOString()
+                timestamp: firebase.serverTimestamp ? firebase.serverTimestamp() : new Date().toISOString() // Use server timestamp if available
             };
 
-            examResults.push(newResult);
-            saveData();
-
-            displayExamResults(newResult);
-            if (isAutoSubmit) {
-                alert('Time is up! Your exam has been automatically submitted.');
+            try {
+                const examResultsColRef = firebase.collection(db, `artifacts/${appId}/public/data/examResults`);
+                await firebase.addDoc(examResultsColRef, newResult);
+                displayExamResults({ id: generateUniqueId(), ...newResult }); // Pass the result to display
+                if (isAutoSubmit) {
+                    alert('Time is up! Your exam has been automatically submitted.');
+                }
+            } catch (error) {
+                console.error("Error saving exam result:", error);
+                alert('Error submitting exam. Please try again.');
+                // Even if saving fails, still show the results to the user
+                displayExamResults({ id: generateUniqueId(), ...newResult });
             }
         }
 
@@ -1142,14 +1316,12 @@
         showAdminLoginBtn.addEventListener('click', () => showPanel(adminLoginPanel));
         showStudentEntryBtn.addEventListener('click', () => {
             showPanel(studentEntryPanel);
-            populateSubjectDropdowns(); // Ensure subjects are loaded for student
+            // populateSubjectDropdowns() is now called by onSnapshot listener
         });
 
-        // Initial load
-        loadData();
-        showPanel(studentEntryPanel); // Default to student entry panel
-        populateSubjectDropdowns(); // Populate dropdowns on initial load
-
+        // Initial load - wait for Firebase to be ready
+        // The `firebaseReady` event listener will trigger the initial UI setup
+        // and data loading via onSnapshot.
     </script>
 </body>
 </html>
