@@ -12,8 +12,8 @@
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Added 'where' for queries
-        import { serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // Added serverTimestamp
+        import { getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Define global variables for Firebase instances
         window.firebaseApp = null;
@@ -24,11 +24,29 @@
 
         // Initialize Firebase and set up authentication listener
         async function initializeFirebase() {
+            let firebaseConfig = {};
             try {
-                // __firebase_config and __app_id are provided by the Canvas environment
-                const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                    // Attempt to parse the provided config
+                    firebaseConfig = JSON.parse(__firebase_config);
+                    // If parsing is successful but projectId is still missing (e.g., __firebase_config was just "{}")
+                    if (!firebaseConfig.projectId) {
+                        console.warn("Firebase config parsed but missing projectId. Using a dummy projectId.");
+                        firebaseConfig.projectId = "dummy-project-id"; // Fallback
+                    }
+                } else {
+                    console.warn("Firebase config (__firebase_config) is undefined or empty. Using a dummy projectId.");
+                    firebaseConfig.projectId = "dummy-project-id"; // Fallback
+                }
+            } catch (e) {
+                console.error("Error parsing __firebase_config:", e);
+                console.warn("Using a dummy projectId due to parsing error.");
+                firebaseConfig.projectId = "dummy-project-id"; // Fallback if JSON.parse fails
+            }
 
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            try {
                 window.firebaseApp = initializeApp(firebaseConfig);
                 window.db = getFirestore(window.firebaseApp);
                 window.auth = getAuth(window.firebaseApp);
@@ -40,10 +58,8 @@
                         window.currentUserId = user.uid;
                         console.log("Firebase Authenticated. User ID:", window.currentUserId);
                     } else {
-                        // Sign in anonymously if no user is found (e.g., if __initial_auth_token is not present)
                         console.log("No user found, attempting anonymous sign-in...");
                         try {
-                            // __initial_auth_token is provided by the Canvas environment
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                                 await signInWithCustomToken(window.auth, __initial_auth_token);
                                 console.log("Signed in with custom token.");
@@ -55,7 +71,6 @@
                             console.log("Firebase Authenticated. User ID:", window.currentUserId);
                         } catch (error) {
                             console.error("Firebase authentication failed:", error);
-                            // Fallback to a random ID if authentication completely fails
                             window.currentUserId = crypto.randomUUID();
                             console.warn("Using a random UUID for user ID due to auth failure:", window.currentUserId);
                         }
@@ -66,12 +81,19 @@
                 });
 
             } catch (error) {
-                console.error("Error initializing Firebase:", error);
-                // If Firebase initialization fails completely, still set a random user ID
+                console.error("Error initializing Firebase App (initializeApp):", error);
+                // If initializeApp fails, ensure isFirebaseReady is still set to true
+                // and a userId is generated so the app doesn't hang.
                 window.currentUserId = crypto.randomUUID();
                 window.isFirebaseReady = true;
                 document.dispatchEvent(new CustomEvent('firebaseReady'));
                 document.getElementById('current-user-id-display').textContent = window.currentUserId;
+                const firebaseStatusMessage = document.getElementById('firebase-status-message');
+                if (firebaseStatusMessage) {
+                    firebaseStatusMessage.textContent = 'Firebase initialization failed. Check console for details.';
+                    firebaseStatusMessage.classList.remove('text-gray-600', 'text-green-600');
+                    firebaseStatusMessage.classList.add('text-red-500');
+                }
             }
         }
 
@@ -79,7 +101,7 @@
 
         // Make Firestore functions available globally or via window object for easier access in the main script
         window.firebase = {
-            getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp // Added where and serverTimestamp
+            getFirestore, collection, doc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, where, serverTimestamp
         };
     </script>
     <style>
@@ -578,7 +600,7 @@
             if (!db || !appId || !currentUserId) {
                 console.error("Firebase not fully initialized. Cannot set up listeners.");
                 firebaseStatusMessage.textContent = 'Firebase connection failed. Please check console.';
-                firebaseStatusMessage.classList.remove('text-gray-600');
+                firebaseStatusMessage.classList.remove('text-gray-600', 'text-green-600');
                 firebaseStatusMessage.classList.add('text-red-500');
                 return;
             }
