@@ -191,9 +191,10 @@
                     <label for="admin-password" class="label-text">Password:</label>
                     <input type="password" id="admin-password" class="input-field" required>
                 </div>
-                <button type="submit" class="btn-primary w-full">Login</button>
+                <button type="submit" id="admin-login-submit-btn" class="btn-primary w-full" disabled>Login</button> <!-- Disabled by default -->
             </form>
             <p id="admin-login-message" class="text-red-500 text-center mt-6 font-medium"></p> <!-- Larger margin, medium font -->
+            <p id="firebase-status-message" class="text-center text-sm mt-4 text-gray-600">Initializing Firebase...</p> <!-- Firebase status message -->
         </div>
 
         <!-- Admin Dashboard Panel -->
@@ -386,7 +387,6 @@
 
     <script>
         // Global State Variables (now primarily for UI rendering, data comes from Firestore)
-        // Moved ADMIN_CREDENTIALS to a global scope so it's accessible by the adminLoginForm event listener
         const ADMIN_CREDENTIALS = { id: 'admin', password: 'password' };
 
         // DOM Elements
@@ -406,6 +406,8 @@
         const adminIdInput = document.getElementById('admin-id');
         const adminPasswordInput = document.getElementById('admin-password');
         const adminLoginMessage = document.getElementById('admin-login-message');
+        const adminLoginSubmitBtn = document.getElementById('admin-login-submit-btn'); // New: Reference to the login button
+        const firebaseStatusMessage = document.getElementById('firebase-status-message'); // New: Reference to status message
 
         // Subject Management
         const addSubjectForm = document.getElementById('add-subject-form');
@@ -508,11 +510,13 @@
          */
         function displayMessage(element, message, type) {
             element.textContent = message;
-            element.classList.remove('text-green-600', 'text-red-500');
+            element.classList.remove('text-green-600', 'text-red-500', 'text-gray-600'); // Added text-gray-600 to remove
             if (type === 'success') {
                 element.classList.add('text-green-600');
             } else if (type === 'error') {
                 element.classList.add('text-red-500');
+            } else if (type === 'info') { // New type for info messages
+                element.classList.add('text-gray-600');
             }
             setTimeout(() => {
                 element.textContent = '';
@@ -573,8 +577,18 @@
 
             if (!db || !appId || !currentUserId) {
                 console.error("Firebase not fully initialized. Cannot set up listeners.");
+                firebaseStatusMessage.textContent = 'Firebase connection failed. Please check console.';
+                firebaseStatusMessage.classList.remove('text-gray-600');
+                firebaseStatusMessage.classList.add('text-red-500');
                 return;
             }
+
+            // Enable admin login button and update status
+            adminLoginSubmitBtn.disabled = false;
+            firebaseStatusMessage.textContent = 'Firebase Ready.';
+            firebaseStatusMessage.classList.remove('text-gray-600');
+            firebaseStatusMessage.classList.add('text-green-600');
+
 
             // Real-time listener for Subjects
             const subjectsColRef = firebase.collection(db, `artifacts/${appId}/public/data/subjects`);
@@ -636,7 +650,8 @@
             const adminPassword = adminPasswordInput.value;
 
             if (adminId === ADMIN_CREDENTIALS.id && adminPassword === ADMIN_CREDENTIALS.password) {
-                // Ensure Firebase is ready before showing dashboard and attempting data operations
+                // The button is already enabled only when Firebase is ready, so this check is mostly redundant here
+                // but kept as a safeguard.
                 if (window.isFirebaseReady && window.db && window.appId) {
                     showPanel(adminDashboardPanel);
                     adminIdInput.value = '';
@@ -646,7 +661,8 @@
                     viewQuestionSubjectSelect.value = '';
                     questionsBySubjectContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Select a subject to view its questions.</p>';
                 } else {
-                    displayMessage(adminLoginMessage, 'Firebase is still initializing or failed to connect. Please wait a moment and try again.', 'error');
+                    // This case should ideally not be hit if the button is correctly disabled
+                    displayMessage(adminLoginMessage, 'Firebase not ready. Please wait a moment and try again.', 'error');
                 }
             } else {
                 displayMessage(adminLoginMessage, 'Invalid Admin ID or Password.', 'error');
@@ -888,7 +904,8 @@
                 imagePreview.src = '#';
                 displayMessage(questionMessage, 'Question added successfully!', 'success');
                 // onSnapshot listener will automatically re-render questions if needed
-            } catch (error) {
+            }
+            catch (error) {
                 console.error("Error adding question:", error);
                 displayMessage(questionMessage, 'Error adding question. Please try again.', 'error');
             }
@@ -1254,7 +1271,8 @@
             // Ensure Firebase is ready before attempting Firestore write
             if (!window.isFirebaseReady || !window.db || !window.appId) {
                 alert('Firebase not ready. Cannot submit exam results.');
-                displayExamResults({ id: generateUniqueId(), ...newResult }); // Still show results to user even if save fails
+                // Even if saving fails, still show results to user
+                displayExamResults({ id: generateUniqueId(), ...newResult });
                 return;
             }
 
