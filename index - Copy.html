@@ -521,11 +521,11 @@
                 </html>
             `;
 
-            const blob = new Blob([docContent], { type: 'application/msword' }); // Use application/msword for .doc
+            const blob = new Blob([docContent], { type: 'text/html' }); // Changed to text/html
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'AMC_Quiz_Results.doc'; // Suggest .doc extension
+            a.download = 'AMC_Quiz_Results.html'; // Changed to .html extension
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
