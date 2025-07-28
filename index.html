@@ -80,7 +80,7 @@
             color: #991b1b;
             font-weight: 600;
         }
-        .submit-btn, .restart-btn {
+        .submit-btn, .restart-btn, .start-btn { /* Added .start-btn */
             background-color: #2563eb;
             color: #ffffff;
             padding: 1rem 2rem;
@@ -91,11 +91,11 @@
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             margin-top: 2rem;
         }
-        .submit-btn:hover, .restart-btn:hover {
+        .submit-btn:hover, .restart-btn:hover, .start-btn:hover { /* Added .start-btn */
             background-color: #1d4ed8;
             transform: translateY(-1px);
         }
-        .submit-btn:active, .restart-btn:active {
+        .submit-btn:active, .restart-btn:active, .start-btn:active { /* Added .start-btn */
             transform: translateY(0);
         }
         .results-section {
@@ -143,9 +143,11 @@
     <div class="container">
         <h1 class="text-4xl font-extrabold text-center text-blue-700 mb-8 rounded-lg p-4 bg-blue-50 shadow-md">Shahriar's Medical Academy AMC MOCK EXAM</h1>
 
-        <div id="timer" class="timer">Time Remaining: 03:30:00</div>
+        <button type="button" id="startBtn" class="start-btn w-full">Start Exam</button>
 
-        <form id="examForm">
+        <div id="timer" class="timer hidden">Time Remaining: 03:30:00</div>
+
+        <form id="examForm" class="hidden">
             <div id="questions-container">
                 <!-- Questions will be dynamically loaded here -->
             </div>
@@ -1973,6 +1975,7 @@
         const passFailMessage = document.getElementById('passFailMessage');
         const timerDisplay = document.getElementById('timer');
         const restartBtn = document.getElementById('restartBtn');
+        const startBtn = document.getElementById('startBtn'); // Get the new start button
 
         const EXAM_DURATION_SECONDS = (3 * 60 + 30) * 60; // 3 hours 30 minutes in seconds
         let timeLeft = EXAM_DURATION_SECONDS;
@@ -2084,6 +2087,15 @@
             submitBtn.classList.add('hidden');
         }
 
+        // Event listener for the Start Exam button
+        startBtn.addEventListener('click', () => {
+            startBtn.classList.add('hidden'); // Hide the start button
+            timerDisplay.classList.remove('hidden'); // Show the timer
+            examForm.classList.remove('hidden'); // Show the exam form
+            loadQuestions(); // Load the questions
+            startTimer(); // Start the timer
+        });
+
         examForm.addEventListener('submit', function(event) {
             event.preventDefault();
             submitExam();
@@ -2096,14 +2108,17 @@
             resultsDiv.classList.add('hidden');
             submitBtn.classList.remove('hidden');
             passFailMessage.classList.remove('pass', 'fail');
-            loadQuestions(); // Reload questions to reset selections and explanations
-            startTimer();
+            // Do not call loadQuestions() or startTimer() here, as it will be triggered by startBtn
+            startBtn.classList.remove('hidden'); // Show the start button again
+            timerDisplay.classList.add('hidden'); // Hide timer
+            examForm.classList.add('hidden'); // Hide exam form
         });
 
-        // Initial load
+        // Initial state: Hide timer and exam form on page load
+        // The start button will be visible by default
         window.onload = () => {
-            loadQuestions();
-            startTimer();
+            // No need to call loadQuestions() or startTimer() here initially
+            // They will be called when the start button is clicked
         };
 
     </script>
